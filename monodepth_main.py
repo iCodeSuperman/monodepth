@@ -13,6 +13,8 @@ from __future__ import absolute_import, division, print_function
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
 
+# start npu migration 20220606
+
 import numpy as np
 import argparse
 import re
