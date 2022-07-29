@@ -14,6 +14,7 @@
 
 from __future__ import absolute_import, division, print_function
 from collections import namedtuple
+from npu_bridge.npu_init import *
 
 import numpy as np
 import tensorflow as tf

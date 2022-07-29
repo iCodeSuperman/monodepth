@@ -44,6 +44,7 @@ class MonodepthDataloader(object):
         elif mode == 'test':
             dataset = tf.data.TextLineDataset([filenames_file])
             dataset = dataset.map(lambda e: self.deal_image_test(e, data_path))
+            dataset = dataset.batch
             self.iterator_dataset = dataset.make_initializable_iterator()
             # 如果测试非立体图那么我们只加载一张左图片
             # we load only one image for test, except if we trained a stereo model

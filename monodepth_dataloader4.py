@@ -7,6 +7,8 @@
 # For any other use of the software not covered by the UCLB ACP-A Licence, 
 # please contact info@uclb.com
 
+# 仅修改train读取数据方式
+
 """Monodepth data loader.
 """
 
@@ -42,19 +44,36 @@ class MonodepthDataloader(object):
             self.left_image_batch, self.right_image_batch = self.iterator_dataset.get_next()
 
         elif mode == 'test':
-            dataset = tf.data.TextLineDataset([filenames_file])
-            dataset = dataset.map(lambda e: self.deal_image_test(e, data_path))
-            self.iterator_dataset = dataset.make_initializable_iterator()
+            # 生成文件名队列
+            input_queue = tf.train.string_input_producer([filenames_file], shuffle=False)
+            # 获取文件中的每行的内容
+            line_reader = tf.TextLineReader()
+            _, line = line_reader.read(input_queue)
+            # 取出图片名
+            split_line = tf.string_split([line]).values
+
             # 如果测试非立体图那么我们只加载一张左图片
             # we load only one image for test, except if we trained a stereo model
             if mode == 'test' and not self.params.do_stereo:
-                self.left_image_batch, _ = self.iterator_dataset.get_next()
+                # 添加左图片路径
+                left_image_path = tf.string_join([self.data_path, split_line[0]])
+                # 打开左图片
+                left_image_o = self.read_image(left_image_path)
             else:
-                self.left_image_batch, self.right_image_batch = self.iterator_dataset.get_next()
+                # 如果不是测试非立体图那么加载左右两张图片
+                left_image_path = tf.string_join([self.data_path, split_line[0]])
+                right_image_path = tf.string_join([self.data_path, split_line[1]])
+                left_image_o = self.read_image(left_image_path)
+                right_image_o = self.read_image(right_image_path)
 
+            self.left_image_batch = tf.stack([left_image_o, tf.image.flip_left_right(left_image_o)], 0)
+            self.left_image_batch.set_shape([2, None, None, 3])
+
+            if self.params.do_stereo:
+                self.right_image_batch = tf.stack([right_image_o, tf.image.flip_left_right(right_image_o)], 0)
+                self.right_image_batch.set_shape([2, None, None, 3])
 
     def deal_image(self, value, data_path):
-
         records = [["None"], ["Node"]]
         pic_left, pic_right = tf.decode_csv(value, records, " ")
 
@@ -77,26 +96,6 @@ class MonodepthDataloader(object):
         left_image.set_shape([None, None, 3])
         right_image.set_shape([None, None, 3])
         return left_image, right_image
-
-
-    def deal_image_test(self, value, data_path):
-        records = [["None"], ["Node"]]
-        pic_left, pic_right = tf.decode_csv(value, records, " ")
-
-        # 如果不是测试非立体图那么加载左右两张图片
-        left_image_path = tf.string_join([self.data_path, pic_left])
-        right_image_path = tf.string_join([self.data_path, pic_right])
-        left_image_o = self.read_image(left_image_path)
-        right_image_o = self.read_image(right_image_path)
-
-        left_image_batch = tf.stack([left_image_o, tf.image.flip_left_right(left_image_o)], 0)
-        left_image_batch.set_shape([2, None, None, 3])
-
-        right_image_batch = tf.stack([right_image_o, tf.image.flip_left_right(right_image_o)], 0)
-        right_image_batch.set_shape([2, None, None, 3])
-
-        return left_image_batch, right_image_path
-
 
     def augment_image_pair(self, left_image, right_image):
         # randomly shift gamma

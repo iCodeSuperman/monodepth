@@ -7,6 +7,8 @@
 # For any other use of the software not covered by the UCLB ACP-A Licence,
 # please contact info@uclb.com
 
+# 仅仅修改train loaddataset 方法，并适配
+
 from __future__ import absolute_import, division, print_function
 
 # only keep warnings and errors
@@ -116,7 +118,7 @@ def train(params):
         left_splits = tf.split(left,  args.num_gpus, 0)
         right_splits = tf.split(right, args.num_gpus, 0)
 
-        tower_grads = []
+        tower_grads  = []
         tower_losses = []
         reuse_variables = None
         with tf.variable_scope(tf.get_variable_scope()):
@@ -181,7 +183,6 @@ def train(params):
             if args.retrain:
                 sess.run(global_step.assign(0))
 
-        save_path = '/home/ma-user/modelarts/user-job-dir/code'
         # GO!
         start_step = global_step.eval(session=sess)
         end_step = start_step
@@ -202,35 +203,24 @@ def train(params):
                     summary_writer.add_summary(summary_str, global_step=step)
                 if step and step % 10000 == 0:
                     train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=step)
-                end_step = step
+                end_step = step;
             except tf.errors.OutOfRangeError:
                 pass
-        # train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
-        train_saver.save(sess, save_path + '/' + args.model_name + '/model', global_step=num_total_steps)
+        train_saver.save(sess, args.log_directory + '/' + args.model_name + '/model', global_step=num_total_steps)
         print("end_step=", end_step)
         print("============================ train ending ================================")
 
 def test(params):
     """Test function."""
-    print("============================ test start ============================")
+
     dataloader = MonodepthDataloader(args.data_path, args.filenames_file, params, args.dataset, args.mode)
-    left = dataloader.left_image_batch
+    left  = dataloader.left_image_batch
     right = dataloader.right_image_batch
-    iterator_dataset = dataloader.iterator_dataset
 
     model = MonodepthModel(params, args.mode, left, right)
 
     # SESSION
-    # config = tf.ConfigProto(allow_soft_placement=True)
-    # sess = tf.Session(config=config)
     config = tf.ConfigProto(allow_soft_placement=True)
-    # config = tf.ConfigProto()
-    custom_op = config.graph_options.rewrite_options.custom_optimizers.add()
-    custom_op.name = "NpuOptimizer"
-    custom_op.parameter_map["use_off_line"].b = True  # 必须显式开启，在昇腾AI处理器执行训练
-    # 需要from tensorflow_core.core.protobuf.rewriter_config_pb2 import RewriterConfig
-    config.graph_options.rewrite_options.remapping = RewriterConfig.OFF  # 必须显式关闭
-    config.graph_options.rewrite_options.memory_optimization = RewriterConfig.OFF  # 必须显式关闭
     sess = tf.Session(config=config)
 
     # SAVER
@@ -239,7 +229,6 @@ def test(params):
     # INIT
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
-    sess.run(iterator_dataset.initializer)
     coordinator = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coordinator)
 
@@ -253,7 +242,7 @@ def test(params):
     num_test_samples = count_text_lines(args.filenames_file)
 
     print('now testing {} files'.format(num_test_samples))
-    disparities = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
+    disparities    = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
     disparities_pp = np.zeros((num_test_samples, params.height, params.width), dtype=np.float32)
     for step in range(num_test_samples):
         disp = sess.run(model.disp_left_est[0])
